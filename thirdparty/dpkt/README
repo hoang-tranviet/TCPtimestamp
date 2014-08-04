@@ -1,0 +1,12 @@
+
+dpkt
+----
+
+Fast, simple packet creation and parsing.
+
+dpkt has no docs, but 
+- refers to pylibpcap's readme file about how to setup a python module.
+- sample code (see examples/) for now.
+
+---
+http://dpkt.googlecode.com/
