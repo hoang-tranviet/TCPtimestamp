@@ -26,9 +26,6 @@ def parse_ip(ip, index):
     dport = tcp.dport
 
 
-    print (src_ip, dst_ip, sport, dport)
-
-
     ts = False
 
 
@@ -38,43 +35,79 @@ def parse_ip(ip, index):
         if o == dpkt.tcp.TCP_OPT_TIMESTAMP:       
             ts = True
             (ts_val, ts_ocr) = struct.unpack('>LL', buf[0:8])
-            print ts_val, ts_ocr
-            
+
         if o == TCP_OPT_MPTCP:
             print "MPTCP!"
             sleep(1)
 
 
-
-    if ts == False:
-        print "no timestamp option"
-
-    conn_info = {'ts_nego': ts }
-
     # if this is SYN
     if tcp.flags & dpkt.tcp.TH_SYN :
-        conn_info['SYN_observed'] = True 
-        conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the knowledge
-        print "SYN"
-        print conn_info
-        return
 
+        if not (tcp.flags & dpkt.tcp.TH_ACK):
+            if ts == False:                # no TS, skip
+                return
+            conn_info = {}
+            conn_info['SYN-ACKed'] = False 
+            conn_info['trace'] = [ ("SYN",ts_val,ts_ocr) ]        
 
-    # skip if this connection doesn't have ts negotiation.
-    elif ((src_ip, dst_ip, sport, dport) in conn):
-        conn_tuple  =  (src_ip, dst_ip, sport, dport)
-        info = conn[conn_tuple]
-        if info[ts_nego] == False:
-            print "skip"
+            conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the DB
             return
+
+        else:   #  this is a SYN/ACK
+            conn_tuple = (dst_ip, src_ip, dport, sport) 
+            if conn_tuple not in conn:          # if SYN not seen, skip.
+                return
+            if ts == False:                     # no TS, skip.
+                return
+            print index
+            print (src_ip, dst_ip, sport, dport)
+            print " SYN/ACK, TS on"
+            conn_info = conn[conn_tuple]
+            conn_info['trace'].append( ("SYN/ACK",ts_val,ts_ocr) )    
+            print conn_info
+            print conn[conn_tuple]
+            return
+
+
+    elif ((src_ip, dst_ip, sport, dport) in conn):
+
+        conn_tuple  =  (src_ip, dst_ip, sport, dport)
+ 
+        info = conn[conn_tuple]
+
+        print index
+        print conn_tuple
+
+        if info['SYN-ACKed'] == False:
+        # not seen SYN-ACK, skip
+            return
+
+        if ts == False:
+            print "Manual analysis"
+            return
+
+        if tcp.flags & dpkt.tcp.TH_FIN:
+            info['trace'].append( ("FIN", ts_val, ts_ocr) )
+
+        info['trace'].append( ("regular", ts_val, ts_ocr) )
+
+        print info['trace']
 
     elif ((dst_ip, src_ip,  dport, sport) in conn):
         conn_tuple  =  (dst_ip, src_ip,  dport, sport)
+        print index
+        print conn_tuple
         info = conn[conn_tuple]
-        if info[ts_nego] == False:
-            print "skip"
+
+        if ts == True:
+            info['trace'].append("regular", ts_val, ts_ocr)
+            print
+        else:
+            print "Manual analysis"
             return
 
+    # skip if this connection doesn't have ts negotiation.
 
 
     
@@ -94,11 +127,9 @@ def main():
         if ether.type == dpkt.ethernet.ETH_TYPE_IP:
             ip = ether.data
             parse_ip(ip, index)
-        else: 
-            print "not an IP packet"
 
 
-        if index > 100:
+        if index > 5000:
             break
 
 
