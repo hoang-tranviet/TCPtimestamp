@@ -13,6 +13,17 @@ TCP_OPT_MPTCP = 30
 
 conn = {} # info of each connection
 
+def save_result():
+
+    outfile = open("/Users/hoang/Downloads/connections.txt", 'w')
+
+    for conn_tuple in conn:
+        outfile.write(str(conn_tuple)+'\n')
+        conn_info = conn[conn_tuple]
+        for pkt in conn_info['trace']:
+            outfile.write(str(pkt)+'\n')
+    outfile.close()
+
 def parse_ip(ip, index):
 
     if not hasattr(ip, 'p'):    # some packets are sniffed brokenly
@@ -54,27 +65,31 @@ def parse_ip(ip, index):
             if ts == False:                # no TS, skip
                 return
             conn_info = {}
-            conn_info['SYN-ACKed'] = False 
-            conn_info['trace'] = [ (index,"SYN",ts_val,ts_ocr) ]        
+            conn_info['SYN-ed']     = True 
+            conn_info['SYN-ACKed']  = False 
+            conn_info['trace']      = [ (index,"SYN",ts_val,ts_ocr) ]        
 
             conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the DB
             return
 
         else:   #  this is a SYN/ACK
             conn_tuple = (dst_ip, src_ip, dport, sport) 
-            if conn_tuple not in conn:          # if SYN not seen, skip.
-                return
+
             if ts == False:                     # no TS, skip.
                 return
-            print ""
-            print index
-            print (src_ip, dst_ip, sport, dport)
-            print " SYN/ACK, TS on"
+            # print ""
+            # print index
+            # print (src_ip, dst_ip, sport, dport)
+            # print " SYN/ACK, TS on"
+            if conn_tuple not in conn:          # if SYN not seen, add new connection.
+                conn_info = {}
+                
+            else:
             conn_info = conn[conn_tuple]
             conn_info['SYN-ACKed'] = True 
             conn_info['trace'].append( (index,"SYN/ACK",ts_val,ts_ocr) )
-            print conn[conn_tuple]
-            # print conn_info            # the same result as previous line, great!
+            # print conn[conn_tuple]
+ #           # print conn_info            # the same result as previous line, great!
             return
 
 
@@ -84,17 +99,17 @@ def parse_ip(ip, index):
         info = conn[conn_tuple]
 
 
-        if info['SYN-ACKed'] == False:
+        if (info['SYN-ACKed'] == False) && ():
         # not seen SYN-ACK, skip
+            # May be RST flag, receiver rejects the connection
             del conn[conn_tuple]
             return
 
-        print ""
-        print index
-        print conn_tuple
+        # print ""
+        # print index
+        # print conn_tuple
         if ts == False:
             print "Manual analysis" 
-            # May be RST flag, receiver rejects the connection
             return
 
         if tcp.flags & dpkt.tcp.TH_FIN:
@@ -102,8 +117,8 @@ def parse_ip(ip, index):
         else:
             info['trace'].append( (index, "regular", ts_val, ts_ocr) )
 
-        for line in info['trace']:
-            print line
+        # for line in info['trace']:
+        #     print line
 
     elif ((dst_ip, src_ip,  dport, sport) in conn):
 
@@ -113,15 +128,15 @@ def parse_ip(ip, index):
 
         if info['SYN-ACKed'] == False:
         # not seen SYN-ACK, skip
+            # May be RST flag, receiver rejects the connection
             del conn[conn_tuple]
             return
 
-        print index
-        print conn_tuple
 
         if ts == False:
+            print index
+            print conn_tuple
             print "Manual analysis" 
-            # May be RST flag, receiver rejects the connection
             return
 
         if tcp.flags & dpkt.tcp.TH_FIN:
@@ -129,8 +144,8 @@ def parse_ip(ip, index):
         else:
             info['trace'].append( (index, "regular", ts_val, ts_ocr) )
 
-        for line in info['trace']:
-            print line
+        # for line in info['trace']:
+        #     print line
 
 
                 # skip if this connection doesn't have ts negotiation.
@@ -158,6 +173,9 @@ def main():
         if index > 200000:
             break
 
+    print "Parsing finished"
+
+    save_result()
 
 
 if __name__== "__main__":
