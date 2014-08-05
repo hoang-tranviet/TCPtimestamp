@@ -15,15 +15,21 @@ conn = {} # info of each connection
 
 def parse_ip(ip, index):
 
+    if not hasattr(ip, 'p'):    # some packets are sniffed brokenly
+        return                  # faster if convert to try/except
     if ip.p != dpkt.ip.IP_PROTO_TCP:
         return
     
     tcp = ip.data
 
-    src_ip = socket.inet_ntoa(ip.src)
-    dst_ip = socket.inet_ntoa(ip.dst)
-    sport = tcp.sport
-    dport = tcp.dport
+    try:
+        src_ip = socket.inet_ntoa(ip.src)
+        dst_ip = socket.inet_ntoa(ip.dst)
+        sport = tcp.sport
+        dport = tcp.dport
+    except AttributeError:
+        return
+
 
 
     ts = False
@@ -80,6 +86,7 @@ def parse_ip(ip, index):
 
         if info['SYN-ACKed'] == False:
         # not seen SYN-ACK, skip
+            del conn[conn_tuple]
             return
 
         print ""
@@ -92,10 +99,11 @@ def parse_ip(ip, index):
 
         if tcp.flags & dpkt.tcp.TH_FIN:
             info['trace'].append( (index,"FIN", ts_val, ts_ocr) )
+        else:
+            info['trace'].append( (index, "regular", ts_val, ts_ocr) )
 
-        info['trace'].append( (index, "regular", ts_val, ts_ocr) )
-
-        print info['trace']
+        for line in info['trace']:
+            print line
 
     elif ((dst_ip, src_ip,  dport, sport) in conn):
 
@@ -105,6 +113,7 @@ def parse_ip(ip, index):
 
         if info['SYN-ACKed'] == False:
         # not seen SYN-ACK, skip
+            del conn[conn_tuple]
             return
 
         print index
@@ -116,18 +125,21 @@ def parse_ip(ip, index):
             return
 
         if tcp.flags & dpkt.tcp.TH_FIN:
-            info['trace'].append( ("FIN", ts_val, ts_ocr) )
+            info['trace'].append( (index, "FIN", ts_val, ts_ocr) )
+        else:
+            info['trace'].append( (index, "regular", ts_val, ts_ocr) )
 
-        info['trace'].append( ("regular", ts_val, ts_ocr) )
+        for line in info['trace']:
+            print line
 
-        print info['trace']
-    # skip if this connection doesn't have ts negotiation.
+
+                # skip if this connection doesn't have ts negotiation.
 
 
     
 def main():
-
-    pfile = "/Users/hoang/Downloads/201204010000.dump"
+    # pfile = "/Users/hoang/Downloads/201204010000.dump"
+    pfile = "/Users/hoang/Downloads/200603030630.dump"
     pcapReader = dpkt.pcap.Reader(file(pfile, "rb"))
 
     print "Trace file is opened"
@@ -143,7 +155,7 @@ def main():
             parse_ip(ip, index)
 
 
-        if index > 10000:
+        if index > 200000:
             break
 
 
