@@ -17,11 +17,19 @@ def save_result():
 
     outfile = open("/Users/hoang/Downloads/connections.txt", 'w')
 
+    outfile.write("Need manual analysis \n")
+
     for conn_tuple in conn:
-        outfile.write(str(conn_tuple)+'\n')
-        conn_info = conn[conn_tuple]
-        for pkt in conn_info['trace']:
-            outfile.write(str(pkt)+'\n')
+
+        info = conn[conn_tuple]
+        # if (info['SYN-ed'] == False) or (info['SYN-ACKed'] == False):
+        #     outfile.write("One-way trace \n")
+
+        if info['manual']:
+            outfile.write('\n'+ str(conn_tuple) +'\n')
+            for pkt in info['trace']:
+                outfile.write(str(pkt)+'\n')
+
     outfile.close()
 
 def parse_ip(ip, index):
@@ -40,7 +48,6 @@ def parse_ip(ip, index):
         dport = tcp.dport
     except AttributeError:
         return
-
 
 
     ts = False
@@ -67,6 +74,7 @@ def parse_ip(ip, index):
             conn_info = {}
             conn_info['SYN-ed']     = True 
             conn_info['SYN-ACKed']  = False 
+            conn_info['manual']     = False 
             conn_info['trace']      = [ (index,"SYN",ts_val,ts_ocr) ]        
 
             conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the DB
@@ -75,20 +83,25 @@ def parse_ip(ip, index):
         else:   #  this is a SYN/ACK
             conn_tuple = (dst_ip, src_ip, dport, sport) 
 
-            if ts == False:                     # no TS, skip.
+            if ts == False:                     # no TS in SYN/ACK, skip.
+                if conn_tuple in conn:
+                    del conn[conn_tuple]
                 return
-            # print ""
-            # print index
-            # print (src_ip, dst_ip, sport, dport)
-            # print " SYN/ACK, TS on"
-            if conn_tuple not in conn:          # if SYN not seen, add new connection.
+
+            if conn_tuple in conn:          
+                conn_info = conn[conn_tuple]
+                conn_info['SYN-ACKed']  = True             
+                conn_info['trace'].append( (index,"SYN/ACK",ts_val,ts_ocr) )
+
+            else:                   # if SYN not seen, add new connection.
                 conn_info = {}
-                
-            else:
-            conn_info = conn[conn_tuple]
-            conn_info['SYN-ACKed'] = True 
-            conn_info['trace'].append( (index,"SYN/ACK",ts_val,ts_ocr) )
-            # print conn[conn_tuple]
+                conn_info['SYN-ed']     = False 
+                conn_info['SYN-ACKed']  = True 
+                conn_info['manual']     = False 
+                conn_info['trace']      = [ (index, "SYN-ACK", ts_val, ts_ocr) ]
+                conn[conn_tuple] = conn_info
+
+             # print conn[conn_tuple]
  #           # print conn_info            # the same result as previous line, great!
             return
 
@@ -99,26 +112,27 @@ def parse_ip(ip, index):
         info = conn[conn_tuple]
 
 
-        if (info['SYN-ACKed'] == False) && ():
-        # not seen SYN-ACK, skip
+        if (ts == False) and (info['SYN-ACKed'] == False) :
+        # no TS and not handshaked, skip
             # May be RST flag, receiver rejects the connection
             del conn[conn_tuple]
             return
 
-        # print ""
-        # print index
-        # print conn_tuple
-        if ts == False:
-            print "Manual analysis" 
+        if (ts == False) and info['SYN-ACKed']:
+            if tcp.flags & dpkt.tcp.TH_RST:
+                info['trace'].append( (index, "RST", -1, -1) )
+            else:
+            # flag for manual analysis
+                info['manual'] = True
+                info['trace'].append( (index, "no TS", -1, -1) )
             return
+
 
         if tcp.flags & dpkt.tcp.TH_FIN:
             info['trace'].append( (index,"FIN", ts_val, ts_ocr) )
         else:
             info['trace'].append( (index, "regular", ts_val, ts_ocr) )
 
-        # for line in info['trace']:
-        #     print line
 
     elif ((dst_ip, src_ip,  dport, sport) in conn):
 
@@ -126,27 +140,26 @@ def parse_ip(ip, index):
         info = conn[conn_tuple]
 
 
-        if info['SYN-ACKed'] == False:
-        # not seen SYN-ACK, skip
+        if (ts == False) and (info['SYN-ACKed'] == False) :
+        # no TS and not handshaked, skip
             # May be RST flag, receiver rejects the connection
             del conn[conn_tuple]
             return
 
-
-        if ts == False:
-            print index
-            print conn_tuple
-            print "Manual analysis" 
+        if (ts == False) and info['SYN-ACKed']:
+            if tcp.flags & dpkt.tcp.TH_RST:
+                info['trace'].append( (index, "RST", -1, -1) )
+            else:
+            # flag for manual analysis
+                info['manual'] = True
+                info['trace'].append( (index, "no TS", -1, -1) )
             return
 
+
         if tcp.flags & dpkt.tcp.TH_FIN:
-            info['trace'].append( (index, "FIN", ts_val, ts_ocr) )
+            info['trace'].append( (index,"FIN", ts_val, ts_ocr) )
         else:
             info['trace'].append( (index, "regular", ts_val, ts_ocr) )
-
-        # for line in info['trace']:
-        #     print line
-
 
                 # skip if this connection doesn't have ts negotiation.
 
