@@ -8,14 +8,24 @@ import socket
 import sys
 import struct
 import hashlib
+import time
+
+dir = "/Users/hoang/Downloads/"
 
 TCP_OPT_MPTCP = 30
 
+NumPacketsProcessed = 1000000
+
 conn = {} # info of each connection
 
-def save_result():
+# packets = []
+packets = {}   
+# Dict or List?
+# Dict for storing conn_tuple, and it is more efficient than List
 
-    outfile = open("/Users/hoang/Downloads/connections.txt", 'w')
+def summarize_result():
+
+    outfile = open(dir + "out/connections.txt", 'w')
 
     outfile.write("Need manual analysis \n")
 
@@ -29,8 +39,40 @@ def save_result():
             outfile.write('\n'+ str(conn_tuple) +'\n')
             for pkt in info['trace']:
                 outfile.write(str(pkt)+'\n')
+                # id of each pkt
+                pId = pkt[0]    
+                packets[pId] = conn_tuple
+
 
     outfile.close()
+
+
+def connections_dump(tracefile):
+
+    outfile    = dir + 'out/no_TS_connections.pcap'
+    pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
+    pcapWriter = dpkt.pcap.Writer(open(outfile,'wb'))
+
+    print "Trace file is opened again"
+    print "parsing file... "
+    index=0
+
+    for time, data in pcapReader:
+        index += 1
+        if index in packets:        # with Dict, time complexity: O(1)
+            print index
+            ether = dpkt.ethernet.Ethernet(data)
+            pcapWriter.writepkt(ether)
+
+        if index > NumPacketsProcessed:
+            break
+
+    # c = 0     # connection Id
+    # for conn_tuple in conn:
+    #     c+=1
+    #     pcw = dpkt.pcap.Writer(open(c+'.pcap','wb'))
+
+
 
 def parse_ip(ip, index):
 
@@ -166,12 +208,12 @@ def parse_ip(ip, index):
 
     
 def main():
-    # pfile = "/Users/hoang/Downloads/201204010000.dump"
-    pfile = "/Users/hoang/Downloads/200603030630.dump"
-    pcapReader = dpkt.pcap.Reader(file(pfile, "rb"))
+    tracefile = dir + "201204010000.dump"
+    pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
 
     print "Trace file is opened"
     print "parsing file... "
+
     index=0
 
     for time, data in pcapReader:
@@ -182,14 +224,19 @@ def main():
             ip = ether.data
             parse_ip(ip, index)
 
+        if (index % 100000 == 0):
+            print index
 
-        if index > 200000:
+        if index > NumPacketsProcessed:
             break
 
     print "Parsing finished"
 
-    save_result()
+    summarize_result(tracefile)
 
+    print "dump connections"
+
+    connections_dump()
 
 if __name__== "__main__":
     main()
