@@ -10,11 +10,13 @@ import struct
 import hashlib
 import time
 
-dir = "/Users/hoang/Downloads/"
+dir = "/Users/hoang/Downloads/201204010000"
 
 TCP_OPT_MPTCP = 30
 
-NumPacketsProcessed = 1000000
+# Range of packets being processed
+PackIdMin = 1000000
+PackIdMax = 3000000  
 
 conn = {} # info of each connection
 
@@ -59,12 +61,14 @@ def connections_dump(tracefile):
 
     for time, data in pcapReader:
         index += 1
+        if (index < PackIdMin):
+            continue
         if index in packets:        # with Dict, time complexity: O(1)
             print index
             ether = dpkt.ethernet.Ethernet(data)
             pcapWriter.writepkt(ether)
 
-        if index > NumPacketsProcessed:
+        if (index > PackIdMax):
             break
 
     # c = 0     # connection Id
@@ -218,6 +222,10 @@ def main():
 
     for time, data in pcapReader:
         index += 1
+
+        if (index < PackIdMin):
+            continue
+
         ether = dpkt.ethernet.Ethernet(data)
 
         if ether.type == dpkt.ethernet.ETH_TYPE_IP:
@@ -227,16 +235,16 @@ def main():
         if (index % 100000 == 0):
             print index
 
-        if index > NumPacketsProcessed:
+        if (index > PackIdMax):
             break
 
     print "Parsing finished"
 
-    summarize_result(tracefile)
+    summarize_result()
 
     print "dump connections"
 
-    connections_dump()
+    connections_dump(tracefile)
 
 if __name__== "__main__":
     main()
