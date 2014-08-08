@@ -10,16 +10,16 @@ import struct
 import hashlib
 import time
 
-dir = "/Users/hoang/Downloads/201204010000"
+dir = "/Users/hoang/trace/201408011400/"
 
 TCP_OPT_MPTCP = 30
 
 # Range of packets being processed
-PackIdMin = 1000000
-PackIdMax = 3000000  
+PackIdMin = 000000
+PackIdMax = 1000000  
 
-conn = {} # info of each connection
-
+conn = {} # dict of no TS connections
+mptcp = {} # dict of mptcp packets
 # packets = []
 packets = {}   
 # Dict or List?
@@ -27,7 +27,7 @@ packets = {}
 
 def summarize_result():
 
-    outfile = open(dir + "out/connections.txt", 'w')
+    outfile = open(dir + "connections.txt", 'w')
 
     outfile.write("Need manual analysis \n")
 
@@ -51,7 +51,7 @@ def summarize_result():
 
 def connections_dump(tracefile):
 
-    outfile    = dir + 'out/no_TS_connections.pcap'
+    outfile    = dir + 'no_TS_connections.pcap'
     pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
     pcapWriter = dpkt.pcap.Writer(open(outfile,'wb'))
 
@@ -61,12 +61,16 @@ def connections_dump(tracefile):
 
     for time, data in pcapReader:
         index += 1
+
         if (index < PackIdMin):
             continue
-        if index in packets:        # with Dict, time complexity: O(1)
+
+        # with Dict, time complexity: O(1)
+        if (index in packets) or (index in mptcp):
             print index
             ether = dpkt.ethernet.Ethernet(data)
             pcapWriter.writepkt(ether)
+
 
         if (index > PackIdMax):
             break
@@ -98,7 +102,6 @@ def parse_ip(ip, index):
 
     ts = False
 
-
     for opt in dpkt.tcp.parse_opts(tcp.opts):
         (o,l,buf) = opt                   # option type, length, data
 
@@ -108,8 +111,8 @@ def parse_ip(ip, index):
 
         if o == TCP_OPT_MPTCP:
             print "MPTCP!"
-            sleep(1)
-
+            print index
+            mptcp[index] = True
 
     # if this is SYN
     if tcp.flags & dpkt.tcp.TH_SYN :
@@ -120,7 +123,7 @@ def parse_ip(ip, index):
             conn_info = {}
             conn_info['SYN-ed']     = True 
             conn_info['SYN-ACKed']  = False 
-            conn_info['manual']     = False 
+            conn_info['manual']     = False
             conn_info['trace']      = [ (index,"SYN",ts_val,ts_ocr) ]        
 
             conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the DB
@@ -212,7 +215,7 @@ def parse_ip(ip, index):
 
     
 def main():
-    tracefile = dir + "201204010000.dump"
+    tracefile = dir + "201408011400.dump"
     pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
 
     print "Trace file is opened"
