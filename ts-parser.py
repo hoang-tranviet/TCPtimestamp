@@ -10,7 +10,7 @@ import struct
 import hashlib
 import time
 
-dir = "/Users/hoang/trace/201408011400/"
+dir = "./trace/201408011400/"
 
 TCP_OPT_MPTCP = 30
 
@@ -45,16 +45,16 @@ def summarize_result():
                 pId = pkt[0]    
                 packets[pId] = conn_tuple
 
-
     outfile.close()
 
 
 def connections_dump(tracefile):
 
     outfile    = dir + 'no_TS_connections.pcap'
+    mptcpfile  = dir + 'mptcp.pcap'
     pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
     pcapWriter = dpkt.pcap.Writer(open(outfile,'wb'))
-
+    pcap_mptcp = dpkt.pcap.Writer(open(mptcpfile,'wb'))
     print "Trace file is opened again"
     print "parsing file... "
     index=0
@@ -66,20 +66,18 @@ def connections_dump(tracefile):
             continue
 
         # with Dict, time complexity: O(1)
-        if (index in packets) or (index in mptcp):
+        if (index in packets):
             print index
             ether = dpkt.ethernet.Ethernet(data)
             pcapWriter.writepkt(ether)
 
+        if (index in mptcp):
+            print index
+            ether = dpkt.ethernet.Ethernet(data)
+            pcap_mptcp.writepkt(ether)
 
         if (index > PackIdMax):
             break
-
-    # c = 0     # connection Id
-    # for conn_tuple in conn:
-    #     c+=1
-    #     pcw = dpkt.pcap.Writer(open(c+'.pcap','wb'))
-
 
 
 def parse_ip(ip, index):
@@ -112,7 +110,8 @@ def parse_ip(ip, index):
         if o == TCP_OPT_MPTCP:
             print "MPTCP!"
             print index
-            mptcp[index] = True
+            print (src_ip, dst_ip, sport, dport)
+            mptcp[index] = (src_ip, dst_ip, sport, dport)
 
     # if this is SYN
     if tcp.flags & dpkt.tcp.TH_SYN :
@@ -124,7 +123,7 @@ def parse_ip(ip, index):
             conn_info['SYN-ed']     = True 
             conn_info['SYN-ACKed']  = False 
             conn_info['manual']     = False
-            conn_info['trace']      = [ (index,"SYN",ts_val,ts_ocr) ]        
+            conn_info['trace']      = [ (index, "A->B","SYN",ts_val,ts_ocr) ]        
 
             conn[(src_ip, dst_ip, sport, dport)] = conn_info          # add this connection to the DB
             return
@@ -140,14 +139,14 @@ def parse_ip(ip, index):
             if conn_tuple in conn:          
                 conn_info = conn[conn_tuple]
                 conn_info['SYN-ACKed']  = True             
-                conn_info['trace'].append( (index,"SYN/ACK",ts_val,ts_ocr) )
+                conn_info['trace'].append( (index, "B->A","SYN/ACK",ts_val,ts_ocr) )
 
             else:                   # if SYN not seen, add new connection.
                 conn_info = {}
                 conn_info['SYN-ed']     = False 
                 conn_info['SYN-ACKed']  = True 
                 conn_info['manual']     = False 
-                conn_info['trace']      = [ (index, "SYN-ACK", ts_val, ts_ocr) ]
+                conn_info['trace']      = [ (index, "B->A", "SYN-ACK", ts_val, ts_ocr) ]
                 conn[conn_tuple] = conn_info
 
              # print conn[conn_tuple]
@@ -169,18 +168,18 @@ def parse_ip(ip, index):
 
         if (ts == False) and info['SYN-ACKed']:
             if tcp.flags & dpkt.tcp.TH_RST:
-                info['trace'].append( (index, "RST", -1, -1) )
+                info['trace'].append( (index, "A->B", "RST", -1, -1) )
             else:
             # flag for manual analysis
                 info['manual'] = True
-                info['trace'].append( (index, "no TS", -1, -1) )
+                info['trace'].append( (index, "A->B", "no TS", -1, -1) )
             return
 
 
         if tcp.flags & dpkt.tcp.TH_FIN:
-            info['trace'].append( (index,"FIN", ts_val, ts_ocr) )
+            info['trace'].append( (index, "A->B", "FIN", ts_val, ts_ocr) )
         else:
-            info['trace'].append( (index, "regular", ts_val, ts_ocr) )
+            info['trace'].append( (index, "A->B", "regular", ts_val, ts_ocr) )
 
 
     elif ((dst_ip, src_ip,  dport, sport) in conn):
@@ -197,18 +196,18 @@ def parse_ip(ip, index):
 
         if (ts == False) and info['SYN-ACKed']:
             if tcp.flags & dpkt.tcp.TH_RST:
-                info['trace'].append( (index, "RST", -1, -1) )
+                info['trace'].append( (index, "B->A", "RST", -1, -1) )
             else:
             # flag for manual analysis
                 info['manual'] = True
-                info['trace'].append( (index, "no TS", -1, -1) )
+                info['trace'].append( (index, "B->A", "no TS", -1, -1) )
             return
 
 
         if tcp.flags & dpkt.tcp.TH_FIN:
-            info['trace'].append( (index,"FIN", ts_val, ts_ocr) )
+            info['trace'].append( (index, "B->A", "FIN", ts_val, ts_ocr) )
         else:
-            info['trace'].append( (index, "regular", ts_val, ts_ocr) )
+            info['trace'].append( (index, "B->A", "regular", ts_val, ts_ocr) )
 
                 # skip if this connection doesn't have ts negotiation.
 

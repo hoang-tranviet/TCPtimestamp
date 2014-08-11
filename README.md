@@ -11,4 +11,4 @@ There are many RST signals from receivers to reject the incoming SYNs.
 5/8/14
 Note 1: Timestamps' unit is millisecond (ms)
 
-Note 2: Many connections 
+Note 2: In many connections, the packets without timestamp are RST.
