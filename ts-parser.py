@@ -10,13 +10,14 @@ import struct
 import hashlib
 import time
 
-dir = "./trace/201408011400/"
+trace = "201204010000"
+dir = "./trace/" + trace + "/"
 
 TCP_OPT_MPTCP = 30
 
 # Range of packets being processed
-PackIdMin = 000000
-PackIdMax = 1000000  
+PackIdMin = 00000000
+PackIdMax = 1,000,000  
 
 conn = {} # dict of no TS connections
 mptcp = {} # dict of mptcp packets
@@ -80,6 +81,32 @@ def connections_dump(tracefile):
             break
 
 
+def parse_opts(buf):
+    """Parse TCP option buffer into a list of (option, data) tuples."""
+    """Adapted from dpkt tcp.py"""
+    opts = []
+    l=0
+    while buf:
+        o = ord(buf[0])     # return byte value which means option_type
+        if o > 1: # 1=TCP_OPT_NOP
+            try:
+                l = ord(buf[1])             # length of option
+                if l < 2:                   # (Hoang) my fix
+                    print "illegal: tcp option length < 2"
+                    opts.append((o,l,None))
+                    break
+                d, buf = buf[2:l], buf[l:]  # d:value, move to the next option in buf
+            except ValueError:
+                print 'bad option', repr(str(buf))
+                opts.append(None) # XXX
+                break
+        else:
+            d, buf = '', buf[1:]
+        # opts.append((o,d))
+        opts.append((o,l,d))        #mod for length info
+    return opts
+
+
 def parse_ip(ip, index):
 
     if not hasattr(ip, 'p'):    # some packets are sniffed brokenly
@@ -100,10 +127,14 @@ def parse_ip(ip, index):
 
     ts = False
 
-    for opt in dpkt.tcp.parse_opts(tcp.opts):
+    for opt in parse_opts(tcp.opts):
         (o,l,buf) = opt                   # option type, length, data
 
-        if o == dpkt.tcp.TCP_OPT_TIMESTAMP:       
+        if o == dpkt.tcp.TCP_OPT_TIMESTAMP:
+            if len(buf) < 8:
+                print "corrupted timestamp"
+                print index, (src_ip, sport), repr(str(buf))
+                return
             ts = True
             (ts_val, ts_ocr) = struct.unpack('>LL', buf[0:8])
 
@@ -214,7 +245,7 @@ def parse_ip(ip, index):
 
     
 def main():
-    tracefile = dir + "201408011400.dump"
+    tracefile = dir + trace + ".dump"
     pcapReader = dpkt.pcap.Reader(file(tracefile, "rb"))
 
     print "Trace file is opened"
